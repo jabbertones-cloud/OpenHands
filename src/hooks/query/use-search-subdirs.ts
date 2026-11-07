@@ -23,13 +23,17 @@ function getFileClient() {
   return new FileClient(getAgentServerClientOptions());
 }
 
+export const MAX_SUBDIRECTORY_SEARCH_PAGES = 100;
+
 export async function searchAllSubdirectories(
   path: string,
   fileClient: FileClientLike = getFileClient(),
+  maxPages: number = MAX_SUBDIRECTORY_SEARCH_PAGES,
 ): Promise<FileSubdirectoryPage> {
   const items: FileSubdirectoryPage["items"] = [];
   const seenPageIds = new Set<string>();
   let pageId: string | null | undefined;
+  let pagesFetched = 0;
 
   while (true) {
     const page = await fileClient.searchSubdirectories(
@@ -38,9 +42,15 @@ export async function searchAllSubdirectories(
     );
     items.push(...page.items);
     pageId = page.next_page_id;
+    pagesFetched += 1;
 
     if (!pageId) {
       return { items, next_page_id: null };
+    }
+
+    if (pagesFetched >= maxPages) {
+      // Return partial items with remaining cursor rather than hanging the UI thread
+      return { items, next_page_id: pageId };
     }
 
     if (seenPageIds.has(pageId)) {
